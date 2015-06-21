@@ -4,6 +4,13 @@
 # https://en.wikipedia.org/wiki/Kirkman's_schoolgirl_problem
 # http://gurmeet.net/puzzles/kirkmans-schoolgirl-problem/
 #
+#
+# This solving algorithm is terribly slow on higher numbers...
+#
+# Some possible ideas to speed this up (and to find only unique solutions):
+#
+#   http://www.recherche.enac.fr/opti/papers/articles/golf.pdf
+#
 ###############################################################################
 
 import math
@@ -21,35 +28,58 @@ import sys
 #
 #------------------------------------------------------------------------------
 
-girls = range(1, 10)
+m = 1
+
+girls = range(1, 6*m + 3 + 1)
+
+#------------------------------------------------------------------------------
 
 COLS = len(girls) / 3
-ROWS = {
-    9: 4,
-    15: 7
-}[len(girls)]
+ROWS = 3*m + 1
+
+print "Girls..:", girls
+print "Matrix.:", COLS, "x", ROWS
+print "--------"
+
+# print math.factorial(len(girls))
+# sys.exit(0)
 
 #------------------------------------------------------------------------------
 
 def C(n, k): return math.factorial(n) / (math.factorial(k)*math.factorial(n-k))
+def P(n, k): return math.factorial(n) / (math.factorial(n-k))
 
 #------------------------------------------------------------------------------
-# Group combinations
+
+def combine(store, items, length,
+    validateitem = None,
+    validatecand = None,
+    i = 0, candidate = []
+):
+    if len(candidate) == length:
+        if validatecand and not validatecand(candidate): return
+        store.append(candidate)
+    else:
+        for j in range(i, len(items)):
+            if validateitem and not validateitem(candidate, items[j]): continue
+            combine(store,
+                items, length,
+                validateitem,
+                validatecand,
+                j + 1, candidate + [ items[j] ]
+            )
+        
+#------------------------------------------------------------------------------
+# Three girl group combinations
 #------------------------------------------------------------------------------
 
-def dogroups():
+groups = []
 
-    groups = []
+combine(groups, girls, 3)
 
-    for a in girls:
-        for b in girls:
-            if b <= a: continue
-            for c in girls:
-                if c <= a: continue
-                if c <= b: continue
-                groups.append([a, b, c])
+print "Groups.: %d (C=%d)" % (len(groups), C(len(girls), 3))
 
-    return groups
+# sys.exit(0)
 
 #------------------------------------------------------------------------------
 # Row combinations
@@ -57,52 +87,50 @@ def dogroups():
 
 rows = []
 
-def dorows(groups, row = []):
-    
-    def isUnique(row):
-        
-        def test(row, stored):
-            for group in row:
-                if group not in stored: return True
-            return False
-        
-        global rows
-        for stored in rows:
-            if not test(row, stored): return False
-        return True
-        
-    if len(row) == COLS:
-        if isUnique(row):
-            if (len(rows) % 100) == 0:
-                print "Rows...:", len(rows), "\r",
-                sys.stdout.flush()
-            rows.append(row)
-    
-    def validrow(group, row):
-        for girl in group:
-            for team in row:
-                if girl in team: return False
-        return True
-    
-    for group in groups:
-        if validrow(group, row):
-            dorows(groups, row + [ group ])
-            # print row + [ group ]
+def checkpartialrow(row, group):
+    # print row, group
+    for girl in group:
+        for team in row:
+            if girl in team: return False
+    return True
 
-groups = dogroups()
-print "Groups.:", len(groups)
+def reportrows(candidate):
+    global rows
+    if (len(rows) % 100) == 0:
+        print "Rows...:", len(rows), "\r",
+        sys.stdout.flush()
+    return True
 
-dorows(groups)
+combine(rows, groups, COLS,
+    validateitem = checkpartialrow,
+    validatecand = reportrows
+)
+
 print "Rows...:", len(rows)
 print "--------"
 
+# print groups
+# print rows
+
 #------------------------------------------------------------------------------
-# From groups, choose a set so that any girl is grouped two other only once
+# From rows, choose combinations where no girl has grouped with others more
+# than once.
 #------------------------------------------------------------------------------
 
 solutions = []
 
-def recurse(rows, solution = []):
+def isUniqueSolution(solution):
+    def isSame(solution, stored):
+        for row in solution:
+            if row not in stored: return False
+        return True
+
+    for stored in solutions:
+        if isSame(solution, stored): return False
+
+    return True
+
+def solve(rows, solution = []):
 
     #--------------------------------------------------------------------------
     # Do we already have solution?
@@ -111,17 +139,7 @@ def recurse(rows, solution = []):
     if len(solution) == ROWS:
         global solutions
         
-        def isSame(solution, stored):
-            for row in solution:
-                if row not in stored: return False
-            return True
-
-        def isUnique(solution):
-            for stored in solutions:
-                if isSame(solution, stored): return False
-            return True
-            
-        if isUnique(solution):
+        if isUniqueSolution(solution):
             solutions.append(solution)
             print "Solution %d:" % len(solutions)
             for row in solution:
@@ -164,12 +182,11 @@ def recurse(rows, solution = []):
     for row in rows:
         if not validrow(row): continue
 
-        recurse(rows, solution + [row])
+        solve(rows, solution + [row])
 
 #------------------------------------------------------------------------------
 
-print "Girls..:", girls
-print "Matrix.:", COLS, "x", ROWS
+solve(rows, [ rows[0] ])
 
-recurse(rows)
+print len(solutions)
 
